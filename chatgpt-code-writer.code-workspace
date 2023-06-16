@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "ui"
+		},
+		{
+			"path": ".github"
+		},
+		{
+			"path": "api"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/*.js": {"when": "$(basename).ts"},
+			"**/*.js.map": true
+			}
+	}
+}
