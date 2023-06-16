@@ -1,6 +1,8 @@
 import { CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/material';
 import React from 'react';
-import { useApiKey } from './api';
+import { useApiKeyStorage, ApiKeyContext } from './api';
+import Toolbar from './Toolbar';
+import ProjectViewer from './ProjectViewer';
 
 export default function App() {
     const shouldUseDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -11,9 +13,13 @@ export default function App() {
         },
     });
 
-    const [apiKey, setApiKey] = useApiKey();
+    const [apiKey, setApiKey] = useApiKeyStorage();
 
     return <ThemeProvider theme={theme}>
         <CssBaseline />
+        <Toolbar apiKey={apiKey} setApiKey={setApiKey} />
+        <ApiKeyContext.Provider value={apiKey}>
+            <ProjectViewer />
+        </ApiKeyContext.Provider>
     </ThemeProvider>
 }
