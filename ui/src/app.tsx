@@ -2,9 +2,11 @@ import { CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/mat
 import React from 'react';
 import { useApiKeyStorage, ApiKeyContext } from './api';
 import Toolbar from './Toolbar';
-import ProjectViewer, { projectContext, useProjectsStorage } from './ProjectViewer';
+import ProjectDashboard, { projectContext, useProjectsStorage } from './ProjectDashboard';
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import NewProject from './NewProject';
+import ProjectViewer from './ProjectViewer';
+import NewFeature from './NewFeature';
 
 export default function App() {
     const shouldUseDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -25,8 +27,10 @@ export default function App() {
             <projectContext.Provider value={{ projects, setProjects }}>
                 <HashRouter>
                     <Routes>
-                        <Route index element={<ProjectViewer />} />
+                        <Route index element={<ProjectDashboard />} />
                         <Route path="/project/new" element={<NewProject />} />
+                        <Route path="/project/:owner/:repo" element={<ProjectViewer />} />
+                        <Route path="/project/:owner/:repo/feature/new" element={<NewFeature />} />
                     </Routes>
                 </HashRouter>
             </projectContext.Provider>

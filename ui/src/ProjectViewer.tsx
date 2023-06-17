@@ -1,85 +1,36 @@
-import React, { useEffect, useState } from 'react';
-import { Project } from '../../data/project';
-import { Button, Paper, Stack, Typography } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-
-const LOCAL_STORAGE_PROJECTS_KEY = 'projects';
-
-export function useProjectsStorage(): [Project[], (projects: Project[]) => void] {
-    const [projects, setProjects] = useState<Project[]>(() => {
-        const projects = localStorage.getItem(LOCAL_STORAGE_PROJECTS_KEY);
-        if (projects) {
-            return JSON.parse(projects);
-        } else {
-            return [];
-        }
-    });
-
-    useEffect(() => {
-        localStorage.setItem(LOCAL_STORAGE_PROJECTS_KEY, JSON.stringify(projects));
-    }, [projects]);
-
-    return [projects, setProjects];
-}
-
-export interface ProjectContext {
-    projects: Project[];
-    setProjects: (projects: Project[]) => void;
-}
-
-export const projectContext = React.createContext<ProjectContext>({
-    projects: [],
-    setProjects: () => { },
-});
-
-
-export const useProjects = () => React.useContext(projectContext);
+import React from 'react';
+import { useProjects } from './ProjectDashboard';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Button, Stack, Typography } from '@mui/material';
 
 export default function ProjectViewer() {
-    const { projects, setProjects } = useProjects();
-
+    const { owner, repo } = useParams();
     const navigate = useNavigate();
 
-    return <Stack
-        direction="column"
-        justifyContent="center"
-        alignItems="center"
-        padding={2}
-        spacing={2}
-    >
-        <Typography variant="h2">Projects</Typography>
-        <Button
-            onClick={() => {
-                navigate('/project/new');
-            }}
-            endIcon={<Add />}
-        >
-            New
-        </Button>
-        <Stack
-            direction="row"
-            flexWrap="wrap"
+    const { projects } = useProjects();
+
+    const project = projects.find(p => p.owner === owner && p.repo === repo);
+
+    if (!project) {
+        return <Typography variant="h3" color="error">{`Project ${owner}/${repo} not found`}</Typography>;
+    } else {
+        return <Stack
+            direction="column"
             justifyContent="center"
             alignItems="center"
+            spacing={2}
+            padding={2}
         >
-            {projects.map((project) => {
-                const projectName = `${project.owner}/${project.repo}`;
-                return <Paper
-                    key={projectName}
-                    sx={{
-                        width: '100px',
-                        height: '100px',
-                        margin: '10px',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                    }}
+            <Typography variant="h3">{`Project ${owner}/${repo}`}</Typography>
+            <Stack direction="row">
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => navigate(`/project/${owner}/${repo}/feature/new`)}
                 >
-                    <Typography>{projectName}</Typography>
-                </Paper>
-            })}
-        </Stack>
-        {projects.length === 0 && <Typography variant="body1">No projects yet.</Typography>}
-    </Stack >
+                    Implement Feature
+                </Button>
+            </Stack>
+        </Stack>;
+    }
 }
