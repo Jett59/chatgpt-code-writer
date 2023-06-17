@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Project } from '../../data/project';
-import { Button, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { Button, Paper, Stack, Typography } from '@mui/material';
 import { Add } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 const LOCAL_STORAGE_PROJECTS_KEY = 'projects';
 
-export default function ProjectViewer() {
+export function useProjectsStorage(): [Project[], (projects: Project[]) => void] {
     const [projects, setProjects] = useState<Project[]>(() => {
         const projects = localStorage.getItem(LOCAL_STORAGE_PROJECTS_KEY);
         if (projects) {
@@ -19,6 +20,27 @@ export default function ProjectViewer() {
         localStorage.setItem(LOCAL_STORAGE_PROJECTS_KEY, JSON.stringify(projects));
     }, [projects]);
 
+    return [projects, setProjects];
+}
+
+export interface ProjectContext {
+    projects: Project[];
+    setProjects: (projects: Project[]) => void;
+}
+
+export const projectContext = React.createContext<ProjectContext>({
+    projects: [],
+    setProjects: () => { },
+});
+
+
+export const useProjects = () => React.useContext(projectContext);
+
+export default function ProjectViewer() {
+    const { projects, setProjects } = useProjects();
+
+    const navigate = useNavigate();
+
     return <Stack
         direction="column"
         justifyContent="center"
@@ -29,23 +51,11 @@ export default function ProjectViewer() {
         <Typography variant="h2">Projects</Typography>
         <Button
             onClick={() => {
-                setProjects([...projects, {
-                    owner: 'owner',
-                    repo: 'repo',
-                    builder: {
-                        baseImage: 'ubuntu:latest',
-                        architecture: 'aarch64',
-                        dependencies: [],
-                        additionalSetupCommands: [],
-                        environment: {},
-                        buildCommands: [],
-                    },
-                    testCommand: 'echo "No test command specified"',
-                }])
+                navigate('/project/new');
             }}
             endIcon={<Add />}
         >
-            Add
+            New
         </Button>
         <Stack
             direction="row"
@@ -57,7 +67,6 @@ export default function ProjectViewer() {
                 const projectName = `${project.owner}/${project.repo}`;
                 return <Paper
                     key={projectName}
-                    // make it a square
                     sx={{
                         width: '100px',
                         height: '100px',
@@ -67,10 +76,10 @@ export default function ProjectViewer() {
                         alignItems: 'center'
                     }}
                 >
-                    <Typography variant="h6">{projectName}</Typography>
+                    <Typography>{projectName}</Typography>
                 </Paper>
             })}
         </Stack>
-        {projects.length == 0 && <Typography variant="body1">No projects yet.</Typography>}
+        {projects.length === 0 && <Typography variant="body1">No projects yet.</Typography>}
     </Stack >
 }

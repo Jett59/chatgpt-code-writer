@@ -14,7 +14,7 @@ export interface ProjectBuilder {
     baseImage: string;
     architecture: 'aarch64' | 'amd64';
 
-    dependencies: string[];
+    packages: string[];
     environment: { [key: string]: string };
     additionalSetupCommands: string[];
 

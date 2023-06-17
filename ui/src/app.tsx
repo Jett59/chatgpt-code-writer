@@ -2,7 +2,9 @@ import { CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/mat
 import React from 'react';
 import { useApiKeyStorage, ApiKeyContext } from './api';
 import Toolbar from './Toolbar';
-import ProjectViewer from './ProjectViewer';
+import ProjectViewer, { projectContext, useProjectsStorage } from './ProjectViewer';
+import { HashRouter, Route, Routes } from 'react-router-dom';
+import NewProject from './NewProject';
 
 export default function App() {
     const shouldUseDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -14,12 +16,20 @@ export default function App() {
     });
 
     const [apiKey, setApiKey] = useApiKeyStorage();
+    const [projects, setProjects] = useProjectsStorage();
 
     return <ThemeProvider theme={theme}>
         <CssBaseline />
         <Toolbar apiKey={apiKey} setApiKey={setApiKey} />
         <ApiKeyContext.Provider value={apiKey}>
-            <ProjectViewer />
+            <projectContext.Provider value={{ projects, setProjects }}>
+                <HashRouter>
+                    <Routes>
+                        <Route index element={<ProjectViewer />} />
+                        <Route path="/project/new" element={<NewProject />} />
+                    </Routes>
+                </HashRouter>
+            </projectContext.Provider>
         </ApiKeyContext.Provider>
     </ThemeProvider>
 }
