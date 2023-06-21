@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { checkAuthorization } from './authorization';
 import { BeginImplementingRequest } from '../data/api';
-import implementFeature from './implementFeature';
+import {beginImplementingFeature} from './implementFeature';
 
 let app = express();
 
@@ -13,7 +13,7 @@ app.use(checkAuthorization());
 app.post('/api/implement', (request, response) => {
     const body: BeginImplementingRequest = request.body;
 
-    response.send(implementFeature(body.title, body.description, body.project));
+    response.send(beginImplementingFeature(body.title, body.description, body.project));
 });
 
 
