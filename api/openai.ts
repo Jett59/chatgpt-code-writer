@@ -71,8 +71,8 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                 throw new Error(`Unexpected status code ${response.status}`);
             }
 
-            if (response.data.choices && response.data.choices.length === 1) {
-                let generatedMessage = response.data.choices[0];
+            if (response.data.choices && response.data.choices.length === 1 && response.data.choices[0].message) {
+                let generatedMessage = response.data.choices[0].message;
                 if (generatedMessage.content) {
                     generatedMessages.push({
                         role: 'assistant',
@@ -100,6 +100,7 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                             content: functionResult
                         });
                         remainingRetries++;
+                        continue;
                     }
                 } else {
                     throw new Error('Unexpected response from OpenAI (doesn\'t include a content or function_call)');

@@ -1,6 +1,7 @@
 import { BeginImplementingResponse } from '../data/api';
 import { Project } from '../data/project';
 import { Feature } from './feature';
+import { checkoutRepo } from './git';
 import { listRepository } from './github';
 import { generateMessage } from './openai';
 
@@ -31,30 +32,11 @@ export function beginImplementingFeature(title: string, description: string, pro
 }
 
 async function implementFeature(feature: Feature): Promise<void> {
-    const summary = await summarize(feature.project.owner, feature.project.repo, '');
-    console.log(generateMessage([
+    const repoPath = await checkoutRepo(feature.project.owner, feature.project.repo);
+    console.log(await generateMessage([
         {
             role: 'user',
             content: feature.description
         }
     ], []));
-}
-
-async function summarize(owner: string, repo: string, directory: string): Promise<{ [path: string]: string }> {
-    let summary: { [path: string]: string } = {};
-
-    let files = await listRepository(owner, repo, directory);
-
-    for (let file of files) {
-        if (file.isFile) {
-            summary[`${directory}/${file.name}`] = file.name;
-        } else {
-            let subSummary = await summarize(owner, repo, `${directory}/${file.name}`);
-            for (let path in subSummary) {
-                summary[path] = subSummary[path];
-            }
-        }
-    }
-
-    return summary;
 }
