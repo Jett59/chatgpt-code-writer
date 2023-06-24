@@ -4,6 +4,7 @@ import { Feature } from './feature';
 import { checkoutRepo } from './git';
 import { listRepository } from './github';
 import { generateMessage } from './openai';
+import { summarize } from './summary';
 
 let inProgressFeatures: { [id: string]: Feature } = {};
 
@@ -33,6 +34,8 @@ export function beginImplementingFeature(title: string, description: string, pro
 
 async function implementFeature(feature: Feature): Promise<void> {
     const repoPath = await checkoutRepo(feature.project.owner, feature.project.repo);
+    const summary = await summarize(repoPath);
+    console.log(summary);
     console.log(await generateMessage([
         {
             role: 'user',
