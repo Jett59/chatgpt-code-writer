@@ -1,6 +1,12 @@
 import { readdir, lstat, readFile } from 'fs/promises';
 import { generateMessage } from './openai';
 
+const IGNORE_PATTERNS: RegExp[] = [
+    /.git/,
+    /package-lock.json/,
+    /Cargo.lock/,
+];
+
 function isBinaryFile(contents: string): boolean {
     // If the file contains a null byte, it's binary.
     if (contents.indexOf('\0') !== -1) {
@@ -17,7 +23,7 @@ export async function summarize(directoryPath: string, projectRelativePath: stri
     const files = await readdir(directoryPath);
 
     for (const file of files) {
-        if (file === ".git") {
+        if (IGNORE_PATTERNS.some(pattern => pattern.test(file))) {
             continue;
         }
 

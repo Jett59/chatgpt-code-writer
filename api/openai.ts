@@ -2,7 +2,8 @@ import axios, { all } from "axios";
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
-const DEFAULT_MODEL = 'gpt-3.5-turbo-16k-0613';
+const DEFAULT_MODEL = 'gpt-3.5-turbo-0613';
+const DEFAULT_16K_MODEL = 'gpt-3.5-turbo-16k-0613';
 
 export interface ChatMessage {
     role: 'assistant' | 'user' | 'system';
@@ -26,16 +27,17 @@ export interface Function {
     invoke: (parameters: any) => Promise<any>;
 }
 
-const CHAT_COMPLETIONS_URL = 'https://chatgpt-proxy.mycodefu.com/v1/chat/completions';
+const CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 
 export async function generateMessage(history: ChatMessage[], functions: Function[]): Promise<ChatMessage[]> {
+    let currentModel = DEFAULT_MODEL;
     let remainingRetries = 3;
     let generatedMessages: ChatMessage[] = [];
     while (remainingRetries-- > 0) {
         let allMessages = history.concat(generatedMessages);
         try {
             const response = await axios.post(CHAT_COMPLETIONS_URL, {
-                model: DEFAULT_MODEL,
+                model: currentModel,
                 temperature: 0.3,
                 messages: allMessages.map(message => ({
                     role: message.role,
@@ -109,6 +111,15 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
         } catch (error: any) {
             if (error.response && error.response.data && error.response.data.error && error.response.data.error.type === 'server_error') {
                 continue;
+                // If it was too long, try again with the 16k model.
+            } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'context_length_exceeded') {
+                if (currentModel === DEFAULT_MODEL) {
+                    currentModel = DEFAULT_16K_MODEL;
+                    remainingRetries++;
+                    continue;
+                } else {
+                    throw error;
+                }
             } else {
                 throw error;
             }
