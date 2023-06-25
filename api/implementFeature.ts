@@ -36,10 +36,4 @@ async function implementFeature(feature: Feature): Promise<void> {
     const repoPath = await checkoutRepo(feature.project.owner, feature.project.repo);
     const summary = await summarize(repoPath);
     console.log(summary);
-    console.log(await generateMessage([
-        {
-            role: 'user',
-            content: feature.description
-        }
-    ], []));
 }
