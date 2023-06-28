@@ -1,4 +1,8 @@
-import axios, { all } from "axios";
+import axios from "axios";
+
+async function sleep(duration: number): Promise<void> {
+    return new Promise<void>(resolve => setTimeout(resolve, duration));
+}
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
@@ -17,26 +21,30 @@ export interface ChatMessage {
 export interface Function {
     name: string;
     description: string;
-    parameters: [{
+    parameters: {
         type: string;
         name: string;
         description: string;
         required: boolean;
-    }];
+    }[];
 
     invoke: (parameters: any) => Promise<any>;
 }
 
-const CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
+const CHAT_COMPLETIONS_PATH = 'v1/chat/completions';
+const DEFAULT_OPENAI_DOMAIN = 'https://api.openai.com';
+const BACKUP_OPENAI_DOMAIN = 'https://chatgpt-proxy.mycodefu.com';
 
 export async function generateMessage(history: ChatMessage[], functions: Function[]): Promise<ChatMessage[]> {
     let currentModel = DEFAULT_MODEL;
+    let currentOpenaiDomain = DEFAULT_OPENAI_DOMAIN;
     let remainingRetries = 3;
+    let lastError = null;
     let generatedMessages: ChatMessage[] = [];
     while (remainingRetries-- > 0) {
         let allMessages = history.concat(generatedMessages);
         try {
-            const response = await axios.post(CHAT_COMPLETIONS_URL, {
+            const response = await axios.post(`${currentOpenaiDomain}/${CHAT_COMPLETIONS_PATH}`, {
                 model: currentModel,
                 temperature: 0.3,
                 messages: allMessages.map(message => ({
@@ -109,9 +117,17 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                 }
             }
         } catch (error: any) {
-            if (error.response && error.response.data && error.response.data.error && error.response.data.error.type === 'server_error') {
+            // If the connection was reset, it may be that the domain was blocked by a proxy.
+            // In this case we try the backup domain in case it isn't blocked.
+            if (error.cause && error.cause.code === 'ECONNRESET' && currentOpenaiDomain === DEFAULT_OPENAI_DOMAIN) {
+                currentOpenaiDomain = BACKUP_OPENAI_DOMAIN;
+                remainingRetries++;
                 continue;
-                // If it was too long, try again with the 16k model.
+            } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.type === 'server_error' || error.response && error.response.data && error.response.data.message === 'Service Unavailable') {
+                console.log('OpenAI server error, retrying...');
+                await sleep(1000);
+                lastError = error;
+                continue;
             } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'context_length_exceeded') {
                 if (currentModel === DEFAULT_MODEL) {
                     currentModel = DEFAULT_16K_MODEL;
@@ -125,5 +141,5 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
             }
         }
     }
-    throw new Error('Retries exceeded');
+    throw lastError;
 }

@@ -21,3 +21,14 @@ export function unsubscribe(feature: Feature, completionListener: () => void, st
     feature.completionListeners = feature.completionListeners.filter(l => l !== completionListener);
     feature.statusListeners = feature.statusListeners.filter(l => l !== statusListener);
 }
+
+export function changeFeatureState(feature: Feature, completed: boolean, status: string): void {
+    feature.completed = completed;
+    feature.status = status;
+
+    feature.statusListeners.forEach(l => l(status));
+
+    if (completed) {
+        feature.completionListeners.forEach(l => l());
+    }
+}
