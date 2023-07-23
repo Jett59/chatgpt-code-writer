@@ -6,8 +6,8 @@ async function sleep(duration: number): Promise<void> {
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
-const DEFAULT_MODEL = 'gpt-3.5-turbo-0613';
-const DEFAULT_16K_MODEL = 'gpt-3.5-turbo-16k-0613';
+const DEFAULT_MODEL = 'gpt-4';
+const DEFAULT_16K_MODEL = 'gpt-4-32k';
 
 export interface ChatMessage {
     role: 'assistant' | 'user' | 'system';
@@ -22,9 +22,8 @@ export interface Function {
     name: string;
     description: string;
     parameters: {
-        type: string;
         name: string;
-        description: string;
+        schemar: any;
         required: boolean;
     }[];
 
@@ -38,7 +37,8 @@ const BACKUP_OPENAI_DOMAIN = 'https://chatgpt-proxy.mycodefu.com';
 export async function generateMessage(history: ChatMessage[], functions: Function[]): Promise<ChatMessage[]> {
     let currentModel = DEFAULT_MODEL;
     let currentOpenaiDomain = DEFAULT_OPENAI_DOMAIN;
-    let remainingRetries = 3;
+    const totalRetries = 3;
+    let remainingRetries = totalRetries;
     let lastError = null;
     let generatedMessages: ChatMessage[] = [];
     while (remainingRetries-- > 0) {
@@ -61,10 +61,7 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                     parameters: {
                         type: 'object',
                         properties: functionDescription.parameters.reduce<any>((properties, parameter) => {
-                            properties[parameter.name] = {
-                                type: parameter.type,
-                                description: parameter.description
-                            };
+                            properties[parameter.name] = { ...parameter.schemar, name: parameter.name };
                             return properties;
                         }, {}),
                     },
@@ -117,7 +114,7 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                 }
             }
         } catch (error: any) {
-            // If the connection was reset, it may be that the domain was blocked by a proxy.
+            // If the connection was reset, it may be that the domain was blocked by a proxy (probably the school wifi).
             // In this case we try the backup domain in case it isn't blocked.
             if (error.cause && error.cause.code === 'ECONNRESET' && currentOpenaiDomain === DEFAULT_OPENAI_DOMAIN) {
                 currentOpenaiDomain = BACKUP_OPENAI_DOMAIN;
@@ -125,8 +122,13 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                 continue;
             } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.type === 'server_error' || error.response && error.response.data && error.response.data.message === 'Service Unavailable') {
                 console.log('OpenAI server error, retrying...');
-                await sleep(1000);
+                await sleep(1000 * (totalRetries - remainingRetries));
                 lastError = error;
+                continue;
+            } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'rate_limit_exceeded') {
+                console.log('OpenAI rate limit exceeded, retrying...');
+                await sleep(1000 * (totalRetries - remainingRetries));
+                lastError = new Error('OpenAI rate limit exceeded');
                 continue;
             } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'context_length_exceeded') {
                 if (currentModel === DEFAULT_MODEL) {
@@ -134,7 +136,7 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                     remainingRetries++;
                     continue;
                 } else {
-                    throw error;
+                    throw new Error('Context length exceeded');
                 }
             } else {
                 throw error;
