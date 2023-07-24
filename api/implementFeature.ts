@@ -5,7 +5,7 @@ import { checkoutRepo } from './git';
 import { listRepository } from './github';
 import { ChatMessage, Function, generateMessage } from './openai';
 import { summarize } from './summary';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, open } from 'fs/promises';
 
 let inProgressFeatures: { [id: string]: Feature } = {};
 
@@ -72,7 +72,6 @@ async function implementFeature(feature: Feature): Promise<void> {
     let steps: { name: string, description: string }[] = [];
     const registerSteps = async ({ steps: newSteps }: { steps: { name: string, description: string }[] }) => {
         steps = steps.concat(newSteps);
-        return `Registered ${steps.length} steps`;
     };
 
     availableFunctions.push({
@@ -104,15 +103,38 @@ async function implementFeature(feature: Feature): Promise<void> {
         ]
     });
 
-    await respondToPrompt("Now register these steps in the system for me. These will be put as tasks on the Github issue.");
+    await respondToPrompt("Now register these steps in the system for me. They will be put as tasks on the Github issue. Please name the steps like commit messages, and ensure they are of a suitable size for a commit.");
 
     console.log(steps);
+
+    let interfaceDescriptions = '';
+    const registerInterfaceDescriptions = async ({ descriptions }: { descriptions: string }) => {
+        interfaceDescriptions = descriptions;
+    };
+
+    availableFunctions.push({
+        name: 'registerInterfaceDescriptions',
+        description: 'Registers a summary of the interfaces (signatures, public data structures etc.).',
+        invoke: registerInterfaceDescriptions,
+        parameters: [
+            {
+                name: 'descriptions',
+                schemar: {
+                    type: 'string',
+                    description: 'A summary of the interfaces (signatures, public data structures etc.)',
+                },
+                required: true,
+            },
+        ]
+    });
+
+    await respondToPrompt("Now I need a summary of the new interfaces (function signatures, public data structures etc.) which you will create for this feature. Please register this in the system for me. This will be put as a comment on the Github issue.");
+    console.log(interfaceDescriptions);
 
     let filesForSteps: { [step: string]: string[] } = {};
 
     const registerFilesForSteps = async ({ files }: { files: { [step: string]: string[] } }) => {
         filesForSteps = files;
-        return `Registered files for ${Object.keys(files).length} steps`;
     };
 
     availableFunctions.push({
@@ -138,80 +160,92 @@ async function implementFeature(feature: Feature): Promise<void> {
         ]
     });
 
-    await respondToPrompt("Please register these in the system for me.");
+    await respondToPrompt("Please register the names of the files to create/edit/delete in the system for me.");
 
     console.log(filesForSteps);
 
-    // Hopefully the descriptions of the steps are good enough (they are pretty good from my observations), so we can delete the history. We have to as we need to give it the entire file contents.
-    history = [];
-    availableFunctions = [];
-
     for (const step of steps) {
         for (const file of filesForSteps[step.name]) {
-            const fileContents = await readFile(repoPath + file, 'utf-8');
-            history.push({
-                role: 'system',
-                content: `Below is the contents of the file '${file}':\n\`\`\`\n${fileContents}\n\`\`\``,
-            });
+            // Hopefully the descriptions of the steps are good enough (they are pretty good from my observations), so we can delete the history. We have to as we need to give it the entire file contents, which may only just fit in the maximum context length.
+            history = [];
+            availableFunctions = [];
 
-            await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}'?`);
+            try {
+                const fileContents = await readFile(repoPath + file, 'utf-8');
+                history.push({
+                    role: 'system',
+                    content: `Below is the contents of the file '${file}':\n\`\`\`\n${fileContents}\n\`\`\`\nI have a summary of the interfaces for this feature:\n${interfaceDescriptions}`,
+                });
 
-            let newContents = fileContents;
-            const registerChanges = async ({ changes }: { changes: { lineNumber: number, newContents?: string, insert?: boolean }[] }) => {
-                for (const change of changes) {
-                    if (change.newContents) {
-                        if (change.insert) {
-                            const lines = newContents.split('\n');
-                            lines.splice(change.lineNumber, 0, change.newContents);
-                            newContents = lines.join('\n');
-                        } else {
-                            newContents = newContents.split('\n').map((line, index) => index === change.lineNumber ? change.newContents : line).join('\n');
+                await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}' (described as "${step.description}")? This is for the feature called '${feature.title}' and described as "${feature.description}. Be sure to only implement what is required by this step, not what is required for the entire feature.`);
+
+                let newContents = fileContents;
+                const registerChanges = async ({ changes }: { changes: { lineNumber: number, newContents?: string, insert?: boolean }[] }) => {
+                    console.log(changes);
+                    // We need to keep a copy of the old line numbers since we want to be able to match the changes with the old line numbers.
+                    // Newly inserted lines should have a line number of -1 so they don't get mixed up with the old line numbers.
+                    let newLines: [string, number][] = newContents.split('\n').map((value, index) => [value, index + 1]);
+                    for (const change of changes) {
+                        const index = newLines.findIndex(([_, lineNumber]) => lineNumber === change.lineNumber);
+                        if (index === -1) {
+                            throw new Error(`Could not find line number ${change.lineNumber} in file '${file}'`);
                         }
-                    } else {
-                        newContents = newContents.split('\n').filter((_, index) => index !== change.lineNumber).join('\n');
-                    }
-                }
-                return `Registered ${changes.length} changes`;
-            };
-
-            availableFunctions.push({
-                name: 'registerChanges',
-                description: 'Registers changes to the current file',
-                invoke: registerChanges,
-                parameters: [
-                    {
-                        name: 'changes',
-                        schemar: {
-                            description: 'The changes to the file',
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    lineNumber: {
-                                        type: 'number',
-                                        description: 'The line number to change (starts at 0)',
-                                    },
-                                    newContents: {
-                                        type: 'string',
-                                        description: 'The new contents of the line (leave out to delete the line)',
-                                    },
-                                    insert: {
-                                        type: 'boolean',
-                                        description: 'When true, inserts the new contents at the line number (moving the previous contents of the line down).'
-                                    }
-                                },
-                                required: ['lineNumber']
+                        if (change.newContents) {
+                            if (change.insert) {
+                                newLines.splice(index, 0, [change.newContents, -1]);
+                            } else {
+                                newLines[index] = [change.newContents, -1];
                             }
-                        },
-                        required: true,
+                        } else {
+                            newLines.splice(index, 1);
+                        }
                     }
-                ]
-            });
+                    newContents = newLines.map(([value, _]) => value).join('\n');
+                };
 
-            await respondToPrompt(`Please register the all of the code changes in the system for me. This will be used in a draft of the feature implementation.`);
-            console.log(history[history.length - 1]);
+                availableFunctions.push({
+                    name: 'registerChanges',
+                    description: 'Registers changes to the current file',
+                    invoke: registerChanges,
+                    parameters: [
+                        {
+                            name: 'changes',
+                            schemar: {
+                                description: 'The changes to the file. All changes are applied simultaneously, meaning line numbers are relative to the original file.',
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        newContents: {
+                                            type: 'string',
+                                            description: 'The value to place at the given line (leave undefined to remove the line). Note: this may include multiple lines.',
+                                        },
+                                        insert: {
+                                            type: 'boolean',
+                                            description: 'When true, inserts the new contents before the specified line number'
+                                        },
+                                        lineNumber: {
+                                            type: 'number',
+                                            description: 'The number of the line to modify (or insert at) (1-indexed). Line numbers are based purely on the original file, and do not change after a change is made.',
+                                        }
+                                    },
+                                    required: ['lineNumber']
+                                }
+                            },
+                            required: true,
+                        }
+                    ]
+                });
 
-            await writeFile(repoPath + file, newContents);
+                await respondToPrompt("Please register those changes in the system for me.");
+
+                await writeFile(repoPath + file, newContents);
+            } catch (error: any) {
+                if (error.code === 'ENOENT') {
+                    const fileHandle = await open(repoPath + file, 'w');
+                    await fileHandle.close();
+                }
+            }
         }
     }
 }

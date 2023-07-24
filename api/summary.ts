@@ -104,6 +104,7 @@ export async function summarize(repoOwner: string, repoName: string, directoryPa
 }
 
 async function generateFileSummary(projectRelativePath: string, content: string): Promise<string> {
+    console.log("Cache miss: ", projectRelativePath);
     const response = await generateMessage([
         {
             role: 'system',

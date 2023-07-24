@@ -27,7 +27,8 @@ export interface Function {
         required: boolean;
     }[];
 
-    invoke: (parameters: any) => Promise<any>;
+    // If it returns undefined, it is assumed that the function doesn't want to get a response from the model.
+    invoke: (parameters: any) => Promise<string | void>;
 }
 
 const CHAT_COMPLETIONS_PATH = 'v1/chat/completions';
@@ -46,7 +47,7 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
         try {
             const response = await axios.post(`${currentOpenaiDomain}/${CHAT_COMPLETIONS_PATH}`, {
                 model: currentModel,
-                temperature: 0.3,
+                temperature: 0.1,
                 messages: allMessages.map(message => ({
                     role: message.role,
                     content: message.content ?? null,
@@ -100,14 +101,17 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                                 arguments: functionArguments
                             }
                         });
-                        // Call the function.
                         let functionResult = await functionDescriptor.invoke(functionArguments);
-                        generatedMessages.push({
-                            role: 'system',
-                            content: functionResult
-                        });
-                        remainingRetries++;
-                        continue;
+                        if (functionResult !== undefined) {
+                            generatedMessages.push({
+                                role: 'system',
+                                content: functionResult
+                            });
+                            remainingRetries++;
+                            continue;
+                        } else {
+                            return generatedMessages;
+                        }
                     }
                 } else {
                     throw new Error('Unexpected response from OpenAI (doesn\'t include a content or function_call)');
@@ -127,7 +131,8 @@ export async function generateMessage(history: ChatMessage[], functions: Functio
                 continue;
             } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'rate_limit_exceeded') {
                 console.log('OpenAI rate limit exceeded, retrying...');
-                await sleep(1000 * (totalRetries - remainingRetries));
+                // First wait for 20 seconds, then 40, then 60 (which should completely clear the rate limit).
+                await sleep(20000 * (totalRetries - remainingRetries));
                 lastError = new Error('OpenAI rate limit exceeded');
                 continue;
             } else if (error.response && error.response.data && error.response.data.error && error.response.data.error.code === 'context_length_exceeded') {
