@@ -67,8 +67,6 @@ async function implementFeature(feature: Feature): Promise<void> {
 
     changeFeatureState(feature, false, 'Generating steps');
 
-    await respondToPrompt(`I would like help implementing a feature called '${feature.title}'. The provided description is: "${feature.description}". What steps would I need to do to implement it? Try to be reasonably specific, but be sure to only include steps which require code changes to avoid cluttering the system. There's no point giving me code just now as I need to review the steps first.`);
-
     let steps: { name: string, description: string }[] = [];
     const registerSteps = async ({ steps: newSteps }: { steps: { name: string, description: string }[] }) => {
         steps = steps.concat(newSteps);
@@ -103,7 +101,7 @@ async function implementFeature(feature: Feature): Promise<void> {
         ]
     });
 
-    await respondToPrompt("Now register these steps in the system for me. They will be put as tasks on the Github issue. Please name the steps like commit messages, and ensure they are of a suitable size for a commit.");
+    await respondToPrompt(`I want help implementing a feature called '${feature.title}' with a description of '${feature.description}'. From what you know about the project I'm working on, can you give me the steps I need to take to implement this feature? I would like steps to be named like commit messages, but they should each encompass an entire distinct aspect of the overall feature.`);
 
     console.log(steps);
 
@@ -146,7 +144,7 @@ async function implementFeature(feature: Feature): Promise<void> {
                 name: 'files',
                 schemar: {
                     type: 'object',
-                    description: 'Key: step name, Value: files to create/edit/delete',
+                    description: 'Key: step name, Value: List of files concerned by this step',
                     properties: {},
                     additionalProperties: {
                         type: 'array',
@@ -174,33 +172,14 @@ async function implementFeature(feature: Feature): Promise<void> {
                 const fileContents = await readFile(repoPath + file, 'utf-8');
                 history.push({
                     role: 'system',
-                    content: `Below is the contents of the file '${file}':\n\`\`\`\n${fileContents}\n\`\`\`\nI have a summary of the interfaces for this feature:\n${interfaceDescriptions}`,
+                    content: `Below is the contents of the file '${file}' in the '${feature.project.repo}' project:\n\`\`\`\n${fileContents}\n\`\`\`\nI have a summary of the interfaces for this feature:\n${interfaceDescriptions}`,
                 });
 
                 await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}' (described as "${step.description}")? This is for the feature called '${feature.title}' and described as "${feature.description}. Be sure to only implement what is required by this step, not what is required for the entire feature.`);
 
                 let newContents = fileContents;
-                const registerChanges = async ({ changes }: { changes: { lineNumber: number, newContents?: string, insert?: boolean }[] }) => {
-                    console.log(changes);
-                    // We need to keep a copy of the old line numbers since we want to be able to match the changes with the old line numbers.
-                    // Newly inserted lines should have a line number of -1 so they don't get mixed up with the old line numbers.
-                    let newLines: [string, number][] = newContents.split('\n').map((value, index) => [value, index + 1]);
-                    for (const change of changes) {
-                        const index = newLines.findIndex(([_, lineNumber]) => lineNumber === change.lineNumber);
-                        if (index === -1) {
-                            throw new Error(`Could not find line number ${change.lineNumber} in file '${file}'`);
-                        }
-                        if (change.newContents) {
-                            if (change.insert) {
-                                newLines.splice(index, 0, [change.newContents, -1]);
-                            } else {
-                                newLines[index] = [change.newContents, -1];
-                            }
-                        } else {
-                            newLines.splice(index, 1);
-                        }
-                    }
-                    newContents = newLines.map(([value, _]) => value).join('\n');
+                const registerChanges = async ({ diff }: { diff: string }) => {
+                    console.log(diff);
                 };
 
                 availableFunctions.push({
@@ -209,28 +188,10 @@ async function implementFeature(feature: Feature): Promise<void> {
                     invoke: registerChanges,
                     parameters: [
                         {
-                            name: 'changes',
+                            name: 'diff',
                             schemar: {
-                                description: 'The changes to the file. All changes are applied simultaneously, meaning line numbers are relative to the original file.',
-                                type: 'array',
-                                items: {
-                                    type: 'object',
-                                    properties: {
-                                        newContents: {
-                                            type: 'string',
-                                            description: 'The value to place at the given line (leave undefined to remove the line). Note: this may include multiple lines.',
-                                        },
-                                        insert: {
-                                            type: 'boolean',
-                                            description: 'When true, inserts the new contents before the specified line number'
-                                        },
-                                        lineNumber: {
-                                            type: 'number',
-                                            description: 'The number of the line to modify (or insert at) (1-indexed). Line numbers are based purely on the original file, and do not change after a change is made.',
-                                        }
-                                    },
-                                    required: ['lineNumber']
-                                }
+                                description: '.patch file format',
+                                type: 'string'
                             },
                             required: true,
                         }
