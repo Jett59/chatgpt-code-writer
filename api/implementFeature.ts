@@ -238,9 +238,23 @@ async function implementFeature(feature: Feature): Promise<void> {
                 await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}' (described as "${step.description}")? This is for the feature called '${feature.title}' and described as "${feature.description}". Be sure to only implement what is required by this step, not what is required for the entire feature. Also, I would recommend working out what line numbers you need to change in the file now.`);
 
                 await respondToPrompt("Please register those changes in the system for me.");
-                const newContents = applyDiff(diff!, fileContents);
+                const maxRetries = 3;
+                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                    try {
+                        const newContents = applyDiff(diff!, fileContents);
 
-                await writeFile(repoPath + file, newContents);
+                        await writeFile(repoPath + file, newContents);
+                        break;
+                    } catch (error) {
+                        console.log(error);
+                        history.push({
+                            role: 'user',
+                            content: `Applying the diff failed with error: \`${error}\`. Please try again (with the problem fixed, of course).`,
+                        });
+                    }
+                }
+                // It might seem like a terrible idea, but I don't think we should throw an error if it exceeded its retries.
+                // The reason for this is that future steps will likely be able to fix the problem, and even if they don't we should catch it when we do our debugging cycle below.
             } catch (error: any) {
                 if (error.code === 'ENOENT') {
                     let fileContents = '';
