@@ -1,11 +1,12 @@
 import { BeginImplementingResponse } from '../data/api';
 import { Project } from '../data/project';
+import { applyDiff } from './diff';
 import { Feature, changeFeatureState } from './feature';
 import { checkoutRepo } from './git';
 import { listRepository } from './github';
 import { ChatMessage, Function, generateMessage } from './openai';
 import { summarize } from './summary';
-import { readFile, writeFile, open } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 
 let inProgressFeatures: { [id: string]: Feature } = {};
 
@@ -132,6 +133,12 @@ async function implementFeature(feature: Feature): Promise<void> {
     let filesForSteps: { [step: string]: string[] } = {};
 
     const registerFilesForSteps = async ({ files }: { files: { [step: string]: string[] } }) => {
+        for (const step in files) {
+            // Return an error if any of the files don't start with a /.
+            if (files[step].some(file => !file.startsWith('/'))) {
+                return 'Files must start with a /';
+            }
+        }
         filesForSteps = files;
     };
 
@@ -170,16 +177,11 @@ async function implementFeature(feature: Feature): Promise<void> {
 
             try {
                 const fileContents = await readFile(repoPath + file, 'utf-8');
-                history.push({
-                    role: 'system',
-                    content: `Below is the contents of the file '${file}' in the '${feature.project.repo}' project:\n\`\`\`\n${fileContents}\n\`\`\`\nI have a summary of the interfaces for this feature:\n${interfaceDescriptions}`,
-                });
 
-                await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}' (described as "${step.description}")? This is for the feature called '${feature.title}' and described as "${feature.description}. Be sure to only implement what is required by this step, not what is required for the entire feature.`);
-
-                let newContents = fileContents;
-                const registerChanges = async ({ diff }: { diff: string }) => {
-                    console.log(diff);
+                let diff = null;
+                const registerChanges = async ({ diff: newDiff }: { diff: string }) => {
+                    console.log(newDiff);
+                    diff = newDiff;
                 };
 
                 availableFunctions.push({
@@ -198,13 +200,80 @@ async function implementFeature(feature: Feature): Promise<void> {
                     ]
                 });
 
+                history.push({
+                    role: 'system',
+                    content: `Below is the contents of the file '/src/fake_main.c' in the 'test-thingo' project:\n\`\`\`\n#include <stdio.h>\n\nint main() {\n  printf("Hello, World!");\n  return 0;\n}\n\n\`\`\`\nI have a summary of the interfaces for this new feature:\nNo new functions or data structures need to be created for this feature.`,
+                }, {
+                    role: 'user',
+                    content: `What changes would I need to make to this file in step 'Change the printf' (described as "Make the printf print 'Hello, new world!' instead.")? This is for the feature called 'Improve messages' and described as "Change the messages to see that our latest batch of changes made a difference". Be sure to only implement what is required by this step, not what is required for the entire feature. Also, I would recommend working out what line numbers you need to change in the file now.`,
+                }, {
+                    role: 'assistant',
+                    content: 'In order to implement this step of the feature, you need to change the printf to print the new message. This change would have to made on line 4 of the file.',
+                }, {
+                    role: 'user',
+                    content: 'Please register those changes in the system for me.',
+                }, {
+                    role: 'assistant',
+                    functionCall: {
+                        name: 'registerChanges',
+                        arguments: {
+                            diff:
+                                `
+--- /src/fake_main.c
++++ /src/fake_main.c
+@@ -3,4 +3,4 @@
+ int main() {
+-  printf("Hello, World!");
++  printf("Hello, new world!");
+   return 0;
+ }`
+                        }
+                    }
+                });
+                history.push({
+                    role: 'system',
+                    content: `Below is the contents of the file '${file}' in the '${feature.project.repo}' project:\n\`\`\`\n${fileContents}\n\`\`\`\nI have a summary of the interfaces for this new feature:\n${interfaceDescriptions}`,
+                });
+
+                await respondToPrompt(`What changes would I need to make to the file '${file}' in step '${step.name}' (described as "${step.description}")? This is for the feature called '${feature.title}' and described as "${feature.description}". Be sure to only implement what is required by this step, not what is required for the entire feature. Also, I would recommend working out what line numbers you need to change in the file now.`);
+
                 await respondToPrompt("Please register those changes in the system for me.");
+                const newContents = applyDiff(diff!, fileContents);
 
                 await writeFile(repoPath + file, newContents);
             } catch (error: any) {
                 if (error.code === 'ENOENT') {
-                    const fileHandle = await open(repoPath + file, 'w');
-                    await fileHandle.close();
+                    let fileContents = '';
+                    const registerNewFile = async ({ contents }: { contents: string }) => {
+                        fileContents = contents;
+                    };
+
+                    availableFunctions.push({
+                        name: 'registerNewFile',
+                        description: 'Registers a new file',
+                        invoke: registerNewFile,
+                        parameters: [
+                            {
+                                name: 'contents',
+                                schemar: {
+                                    type: 'string',
+                                    description: 'The contents of the new file',
+                                },
+                                required: true,
+                            }
+                        ]
+                    });
+
+                    history.push({
+                        role: 'system',
+                        content: `You are working in the ${feature.project.repo} project.\nHere is a summary of the interfaces for this feature:\n${interfaceDescriptions}`,
+                    });
+
+                    await respondToPrompt(`I just created the ${file} file. What should I put in it? This is the '${step.name}' step (described as '${step.description}') for the feature called '${feature.title}' and described as "${feature.description}". Be sure to only implement what is required by this step, not what is required for the entire feature.`);
+
+                    await writeFile(repoPath + file, fileContents);
+                } else {
+                    throw error;
                 }
             }
         }
