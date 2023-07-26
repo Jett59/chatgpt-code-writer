@@ -1,4 +1,7 @@
 export function applyDiff(diff: string, oldFileContents: string): string {
+    if (diff.length === 0) {
+        return oldFileContents;
+    }
     console.log("Applying diff...");
     const diffLines = diff.split('\n');
     const oldLines = oldFileContents.split('\n');

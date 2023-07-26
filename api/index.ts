@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { checkAuthorization } from './authorization';
 import { BeginImplementingRequest } from '../data/api';
 import { beginImplementingFeature, getStatusUpdatesForFeature, subscribeToFeature, unsubscribeFromFeature } from './implementFeature';
 import { createServer } from 'http';
@@ -13,7 +12,6 @@ const webSocketServer = new Ws.Server({ server: httpServer });
 
 app.use(express.json());
 app.use(cors());
-app.use(checkAuthorization());
 
 app.post('/api/implement', (request, response) => {
     const body: BeginImplementingRequest = request.body;
