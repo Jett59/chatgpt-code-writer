@@ -28,7 +28,8 @@ export interface ApiResponse<T> {
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
-const API_BASE_URL = 'http://localhost:3001/api/';
+const API_HOST = 'localhost:3001';
+const API_BASE_URL = `http://${API_HOST}/api/`;
 
 export class Api {
     private apiKey: string;
@@ -79,4 +80,8 @@ export class Api {
 export function useApi(path: string, method: Method): Api {
     const apiKey = useApiKey();
     return new Api(apiKey ?? '', path, method);
+}
+
+export function openWebSocket() {
+    return new WebSocket(`ws://${API_HOST}`);
 }

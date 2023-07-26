@@ -7,6 +7,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import NewProject from './NewProject';
 import ProjectViewer from './ProjectViewer';
 import NewFeature from './NewFeature';
+import FeatureView from './FeatureView';
 
 export default function App() {
     const shouldUseDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -31,6 +32,7 @@ export default function App() {
                         <Route path="/project/new" element={<NewProject />} />
                         <Route path="/project/:owner/:repo" element={<ProjectViewer />} />
                         <Route path="/project/:owner/:repo/feature/new" element={<NewFeature />} />
+                        <Route path="/project/:owner/:repo/feature/:id" element={<FeatureView />} />
                     </Routes>
                 </HashRouter>
             </projectContext.Provider>
