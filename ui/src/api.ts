@@ -1,25 +1,5 @@
 import React, { useEffect, useState } from "react";
 
-const LOCAL_STORAGE_API_KEY_KEY = 'api_key';
-
-export function useApiKeyStorage(): [string | null, (apiKey: string | null) => void] {
-    const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem(LOCAL_STORAGE_API_KEY_KEY));
-
-    useEffect(() => {
-        if (apiKey !== null) {
-            localStorage.setItem(LOCAL_STORAGE_API_KEY_KEY, apiKey);
-        } else {
-            localStorage.removeItem(LOCAL_STORAGE_API_KEY_KEY);
-        }
-    }, [apiKey]);
-
-    return [apiKey, setApiKey];
-}
-
-export const ApiKeyContext = React.createContext<string | null>(null);
-
-export const useApiKey = () => React.useContext(ApiKeyContext);
-
 export interface ApiResponse<T> {
     statusCode: number;
     data?: T;
@@ -32,19 +12,16 @@ const API_HOST = 'localhost:3001';
 const API_BASE_URL = `http://${API_HOST}/api/`;
 
 export class Api {
-    private apiKey: string;
     private path: string;
     private method: Method;
 
-    constructor(apiKey: string, path: string, method: Method) {
-        this.apiKey = apiKey;
+    constructor(path: string, method: Method) {
         this.path = path;
         this.method = method;
     }
 
     async request<Request, Response>(body?: Request): Promise<ApiResponse<Response>> {
         const headers: any = {
-            'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
         };
 
@@ -78,8 +55,7 @@ export class Api {
 }
 
 export function useApi(path: string, method: Method): Api {
-    const apiKey = useApiKey();
-    return new Api(apiKey ?? '', path, method);
+    return new Api(path, method);
 }
 
 export function openWebSocket() {

@@ -3,12 +3,7 @@ import { Box, IconButton, Paper, Stack, Tooltip, Typography, useTheme } from '@m
 import React from 'react';
 import ApiKeySelector from './ApiKeyEditor';
 
-export default function Toolbar({ apiKey, setApiKey }: {
-    apiKey: string | null,
-    setApiKey: (apiKey: string | null) => void
-}) {
-    const [ApiKeySelectorOpen, setApiKeySelectorOpen] = React.useState(false);
-
+export default function Toolbar() {
     const theme = useTheme();
 
     return <Box
@@ -32,14 +27,6 @@ export default function Toolbar({ apiKey, setApiKey }: {
                     >ChatGPT Code Writer</a>
                 </Typography>
             </Box>
-            <Box>
-                <Tooltip title="API Key">
-                    <IconButton onClick={() => setApiKeySelectorOpen(true)}>
-                        <Key />
-                    </IconButton>
-                </Tooltip>
-            </Box>
         </Stack>
-        <ApiKeySelector apiKey={apiKey} setApiKey={setApiKey} open={ApiKeySelectorOpen} close={() => setApiKeySelectorOpen(false)} />
     </Box>
 }

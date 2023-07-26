@@ -17,7 +17,7 @@ function StatusMessage({ statusMessage }: { statusMessage: Status }) {
                         <Typography>Data</Typography>
                     </AccordionSummary>
                     <AccordionDetails>
-                        <Typography whiteSpace="pre">{JSON.stringify(statusMessage.data, null, 2)}</Typography>
+                        <Typography whiteSpace="pre">{typeof statusMessage.data === 'string' ? statusMessage.data : JSON.stringify(statusMessage.data, null, 2)}</Typography>
                     </AccordionDetails>
                 </Accordion>
             </Box>
